@@ -1,0 +1,50 @@
+pipeline {
+  agent any
+   tools{
+       maven 'maven3'
+   }
+     stages {
+     stage('checkout'){
+         steps{
+             checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[credentialsId: '4cb5be37-9c1d-49dc-a83f-1763c000d23b', url: 'https://github.com/Kamalanadh-Reddy/simple-java-maven-app.git']]])
+         }          
+         }
+     stage('Build') {
+        steps {
+
+           sh "mvn clean package"                                                                                                                                                                    
+
+        }
+    }
+    stage('copy & rename') {
+         steps {
+            sh 'ls -ltra'
+            sh 'mv /var/lib/jenkins/workspace/maven-k8/target/my-app-1.0-SNAPSHOT.jar /var/lib/jenkins/workspace/maven-k8/target/my-app.jar'            
+         }
+      }
+	stage('ECR-login'){
+		 steps {
+			sh 'aws ecr get-login-password --region ap-southeast-1 | sudo docker login --username AWS --password-stdin 999640821553.dkr.ecr.ap-southeast-1.amazonaws.com'
+		 }
+	  }
+	stage('build & tag image') {
+		 steps {
+			sh 'sudo docker build -t 999640821553.dkr.ecr.ap-southeast-1.amazonaws.com/maven-k8 .'
+		  }
+	  }
+	stage('push-image-ECR') {
+		 steps {
+			sh 'sudo docker push 999640821553.dkr.ecr.ap-southeast-1.amazonaws.com/maven-k8:latest'
+		  }
+	  }
+	stage('deploy') {
+		 steps {
+			sh 'kubectl apply -f /var/lib/jenkins/workspace/maven-k8/appdeploy.yaml -n app'
+			sh 'kubectl apply -f /var/lib/jenkins/workspace/maven-k8/appsvc.yaml -n app'
+			sh 'kubectl apply -f /var/lib/jenkins/workspace/maven-k8/apping.yaml -n app'
+			sleep 45
+			sh 'kubectl get ing -n app'
+		 }
+	}
+	}
+}
